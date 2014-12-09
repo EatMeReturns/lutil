@@ -33,6 +33,67 @@ function math.direction(x1, y1, x2, y2) return math.atan2(y2 - y1, x2 - x1) end
 function math.vector(...) return math.distance(...), math.direction(...) end
 function math.inside(px, py, rx, ry, rw, rh) return px >= rx and px <= rx + rw and py >= ry and py <= ry + rh end
 function math.anglediff(d1, d2) return math.rad((((math.deg(d2) - math.deg(d1) % 360) + 540) % 360) - 180) end
+function math.hcora(cx, cy, cr, rx, ry, rw, rh) -- Hot circle on rectangle action.
+  local hw, hh = rw / 2, rh / 2
+  local cdx, cdy = math.abs(cx - (rx + hw)), math.abs(cy - (ry + hh))
+  if cdx > hw + cr or cdy > hh + cr then return false end
+  if cdx <= hw or cdy <= hh then return true end
+  return (cdx - hw) ^ 2 + (cdy - hh) ^ 2 <= (cr ^ 2)
+end
+
+function math.hloca(x1, y1, x2, y2, cx, cy, cr) -- Hot line on circle action.
+  local dx, dy = (x2 - x1), (y2 - y1)
+  local a2 = math.abs(dx * (cy - y1) - dy * (cx - x1))
+  local l = (dx * dx + dy * dy) ^ .5
+  local h = a2 / l
+  if not (h < cr) then return false end
+  local t = (dx / l) * (cx - x1) + (dy / l) * (cy - y1)
+  if t < 0 then return false end
+  return l > t - ((cr ^ 2 - h ^ 2) ^ .5)
+end
+
+function math.hcoca(x1, y1, r1, x2, y2, r2) -- Hot circle on circle action.
+  local dx, dy, r = x2 - x1, y2 - y1, r1 + r2
+  return (dx * dx) + (dy * dy) < r * r
+end
+
+function math.hlola(x1, y1, x2, y2, x3, y3, x4, y4) -- Hot line on line action (boolean).
+  local function s(x1, y1, x2, y2, x3, y3)
+    return (y3 - y1) * (x2 - x1) > (y2 - y1) * (x3 - x1)
+  end
+  return s(x1, y1, x3, y3, x4, y4) ~= s(x2, y2, x3, y3, x4, y4) and s(x1, y1, x2, y2, x3, y3) ~= s(x1, y1, x2, y2, x4, y4)
+end
+
+function math.hlolax(x1, y1, x2, y2, x3, y3, x4, y4) -- Hot line on line action (intersection point).
+  local a1, b1, a2, b2 = y2 - y1, x1 - x2, y4 - y3, x3 - x4
+  local c1, c2 = a1 * x1 + b1 * y1, a2 * x3 + b2 * y3
+  local d = a1 * b2 - a2 * b1
+  if d == 0 then return false end
+  local x, y = (b2 * c1 - b1 * c2) / d, (a1 * c2 - a2 * c1) / d
+  if x < math.min(x1, x2) or x > math.max(x1, x2) or x < math.min(x3, x4) or x > math.max(x3, x4) then return false end
+  if y < math.min(y1, y2) or y > math.max(y1, y2) or y < math.min(y3, y4) or y > math.max(y3, y4) then return false end
+  return x, y
+end
+
+function math.hlora(x1, y1, x2, y2, rx, ry, rw, rh) -- Hot line on rectangle action (boolean).
+  local rxw, ryh = rx + rw, ry + rh
+  return math.hlola(x1, y1, x2, y2, rx, ry, rxw, ry)
+      or math.hlola(x1, y1, x2, y2, rx, ry, rx, ryh)
+      or math.hlola(x1, y1, x2, y2, rxw, ry, rxw, ryh)
+      or math.hlola(x1, y1, x2, y2, rx, ryh, rxw, ryh)
+end
+
+function math.hlorax(x1, y1, x2, y2, rx, ry, rw, rh) -- Hot line on rectangle action (closest intersection point).
+  local ps = {}
+  ps[1] = {math.hlolax(x1, y1, x2, y2, rx, ry, rx + rw, ry)}
+  ps[2] = {math.hlolax(x1, y1, x2, y2, rx, ry, rx, ry + rh)}
+  ps[3] = {math.hlolax(x1, y1, x2, y2, rx + rw, ry, rx + rw, ry + rh)}
+  ps[4] = {math.hlolax(x1, y1, x2, y2, rx, ry + rh, rx + rw, ry + rh)}
+  local ds = table.map(ps, function(v, i) return v[1] and {math.distance(x1, y1, v[1], v[2]), i} or {math.huge, i} end)
+  table.sort(ds, function(a, b) return a[1] < b[1] end)
+  if ds[1][1] == math.huge then return false end
+  return unpack(ps[ds[1][2]])
+end
 
 
 ----------------
@@ -76,18 +137,6 @@ function table.except(t, ks)
   return res
 end
 
-function table.keys(t)
-  local res = {}
-  table.each(t, function(_, k) table.insert(res, k) end)
-  return res
-end
-
-function table.values(t)
-  local res = {}
-  table.each(t, function(v) table.insert(res, v) end)
-  return res
-end
-
 function table.each(t, f)
   if not t then return end
   for k, v in pairs(t) do if f(v, k) then break end end
@@ -112,9 +161,9 @@ function table.clear(t, v)
   table.each(t, function(_, k) t[k] = v end)
 end
 
-function table.merge(t1, t2, shallow)
+function table.merge(t1, t2)
   t1, t2 = t1 or {}, t2 or {}
-  for k, v in pairs(t1) do t2[k] = shallow and v or table.copy(v) end
+  for k, v in pairs(t1) do t2[k] = table.copy(v) end
   return t2
 end
 
@@ -175,8 +224,33 @@ function table.print(t, n)
       else io.write('\t') end
       table.print(v, n + 1)
     end
-    if empty then io.write(string.rep('\t', n) .. '{}\n') end
+    if empty then io.write('{}\n') end
   end
+end
+
+
+----------------
+-- Byte
+----------------
+byte = {}
+function byte.extract(x, a, b)
+  b = b or a
+  x = x % (2 ^ (b + 1))
+  for i = 1, a do
+    x = math.floor(x / 2)
+  end
+  return x
+end
+
+function byte.insert(x, y, a, b)
+  local res = x
+  for i = a, b do
+    local e = byte.extract(y, i - a)
+    if e ~= byte.extract(x, i) then
+      res = (e == 1) and res + (2 ^ i) or res - (2 ^ i)
+    end
+  end
+  return res
 end
 
 
@@ -185,15 +259,14 @@ end
 ----------------
 f = {}
 f.empty = function() end
-f.exe = function(x, ...) if type(x) == 'function' then return x(...) end return x end
+f.exe = function(x, ...) if x then return x(...) end end
 f.ego = function(f, ...) local a = {...} return function(x) x[f](x, unpack(a)) end end
 f.egoexe = function(f, ...) local a = {...} return function(x) if x[f] then x[f](x, unpack(a)) end end end
 f.val = function(x) return type(x) == 'function' and x or function() return x end end
 f.cur = function(fn, x) return function(y) return fn(x, y) end end
-f.wrap = function(fn, ...) local a = {...} return function() fn(unpack(a)) end end
 
 
 ----------------
 -- String
 ----------------
-string.capitalize = function(s) s = ' ' .. s return s:gsub('(%s%l)', string.upper):sub(2) end
+string.capitalize = function(s) s = ' ' .. s return s:gsub('(%s%l)', string.upper) end
