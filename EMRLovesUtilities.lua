@@ -63,6 +63,22 @@ function love.mouse.inBox(bx, by, bw, bh)
 end
 --returns true if the mouse is within the bounds of a box, inclusive. false otherwise.
 
+function love.mouse.isDownPausing(button)
+	return not paused and love.mouse.isDown(button)
+end
+--returns true if the button is down and the game is not paused. Requires global 'paused'
+
+
+------------------
+-- LOVE KEYBOARD -
+------------------
+
+function love.keyboard.isDownPausing(key)
+	return not paused and love.keyboard.isDown(key)
+end
+--returns true if the key is down and the game is not paused. Requires global 'paused'
+
+
 ------------------
 -- LOVE GFX ------
 ------------------
